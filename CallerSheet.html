@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LUCKY Bingo Caller - Irish Edition</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;600&display=swap");
+
+      body {
+        font-family: "Montserrat", sans-serif;
+        background-color: #fcfbf7;
+        color: #a3821a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        margin: 0;
+        text-align: center;
+      }
+
+      h1 {
+        font-weight: 300;
+        letter-spacing: 5px;
+        margin-bottom: 5px;
+      }
+
+      #current-call {
+        font-size: 8rem;
+        font-weight: 600;
+        margin: 10px 0;
+        height: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      button#draw-btn {
+        background-color: #a3821a;
+        color: white;
+        border: none;
+        padding: 20px 50px;
+        font-size: 1.5rem;
+        border-radius: 50px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          background-color 0.2s;
+        box-shadow: 0 4px 15px rgba(163, 130, 26, 0.3);
+      }
+
+      button:active {
+        transform: scale(0.95);
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      /* Voice Toggle Styling */
+      .toggle-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+
+      .voice-selector {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9rem;
+      }
+
+      .voice-selector label {
+        color: #888;
+      }
+
+      .voice-selector select {
+        font-family: "Montserrat", sans-serif;
+        font-size: 0.85rem;
+        padding: 6px 10px;
+        border: 1px solid #e5dab9;
+        border-radius: 6px;
+        background: #fff;
+        color: #5e4a0f;
+        cursor: pointer;
+        max-width: 280px;
+      }
+
+      /* History Styling */
+      .history-section {
+        width: 100%;
+        max-width: 800px;
+      }
+      h3 {
+        font-weight: 300;
+        border-bottom: 1px solid #e5dab9;
+        padding-bottom: 10px;
+      }
+
+      #history {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .history-item {
+        background: #e5dab9;
+        color: #5e4a0f;
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-size: 1.4rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+        user-select: none;
+      }
+
+      /* Verification Highlight */
+      .history-item.verified {
+        background-color: #2e7d32;
+        color: white;
+        transform: scale(1.1);
+        border-color: #1b5e20;
+      }
+
+      .stats {
+        margin-top: 10px;
+        font-size: 1rem;
+        color: #888;
+      }
+      .reset-btn {
+        background-color: transparent;
+        color: #a3821a;
+        border: 1px solid #a3821a;
+        padding: 10px 20px;
+        margin-top: 50px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LUCKY CALLER</h1>
+    <div id="current-call">-</div>
+
+    <div class="controls">
+      <button id="draw-btn" onclick="drawNumber()">DRAW NEXT</button>
+
+      <label class="toggle-container">
+        <input type="checkbox" id="voice-toggle" checked onchange="toggleVoiceSelector()" />
+        Enable Irish Voice ☘️
+      </label>
+
+      <div class="voice-selector" id="voice-selector-container">
+        <label for="voice-select">Voice:</label>
+        <select id="voice-select" onchange="onVoiceSelected()">
+          <option value="">Loading voices…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stats">Progress: <span id="count">0</span> / 75</div>
+
+    <div class="history-section">
+      <h3>CALL HISTORY (Click to Verify)</h3>
+      <div id="history"></div>
+    </div>
+
+    <button class="reset-btn" onclick="resetGame()">RESET SESSION</button>
+
+    <script>
+      const letters = ["L", "U", "C", "K", "Y"];
+      const synth = window.speechSynthesis;
+
+      let availableNumbers = [];
+      let calledNumbers = [];
+      let selectedVoice = null;
+
+      // Preferred voice priority order:
+      // 1. Any en-IE voice (true Irish)
+      // 2. "Moira" — macOS built-in Irish voice
+      // 3. en-GB voices as a reasonable accent fallback
+      // 4. Any English voice
+      function pickBestVoice(voices) {
+        return (
+          voices.find((v) => v.lang === "en-IE") ||
+          voices.find((v) => v.lang.startsWith("en-IE")) ||
+          voices.find((v) => v.name.toLowerCase().includes("moira")) ||
+          voices.find((v) => v.lang === "en-GB") ||
+          voices.find((v) => v.lang.startsWith("en")) ||
+          voices[0] ||
+          null
+        );
+      }
+
+      function populateVoiceList() {
+        const voices = synth.getVoices();
+        if (voices.length === 0) return;
+
+        const select = document.getElementById("voice-select");
+        select.innerHTML = "";
+
+        const best = pickBestVoice(voices);
+
+        voices.forEach((v) => {
+          const opt = document.createElement("option");
+          opt.value = v.name;
+          opt.textContent = `${v.name} (${v.lang})`;
+          if (v === best) opt.selected = true;
+          select.appendChild(opt);
+        });
+
+        // Apply the auto-selected best voice
+        selectedVoice = best;
+      }
+
+      function toggleVoiceSelector() {
+        const visible = document.getElementById("voice-toggle").checked;
+        document.getElementById("voice-selector-container").style.display = visible ? "flex" : "none";
+      }
+
+      function onVoiceSelected() {
+        const name = document.getElementById("voice-select").value;
+        selectedVoice = synth.getVoices().find((v) => v.name === name) || null;
+      }
+
+      // Voices load asynchronously — handle both Chrome and Safari
+      speechSynthesis.onvoiceschanged = populateVoiceList;
+      populateVoiceList(); // immediate call for Firefox / already-loaded voices
+
+      function initGame() {
+        availableNumbers = [];
+        calledNumbers = [];
+        for (let i = 1; i <= 75; i++) {
+          const letter = letters[Math.floor((i - 1) / 15)];
+          availableNumbers.push({ letter, num: i });
+        }
+        updateDisplay("-");
+        document.getElementById("history").innerHTML = "";
+        document.getElementById("draw-btn").disabled = false;
+        toggleVoiceSelector();
+      }
+
+      function drawNumber() {
+        if (availableNumbers.length === 0) return;
+
+        const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+        const picked = availableNumbers.splice(randomIndex, 1)[0];
+        calledNumbers.push(picked);
+
+        const displayString = `${picked.letter} ${picked.num}`;
+        updateDisplay(displayString);
+        addToHistory(displayString);
+
+        if (document.getElementById("voice-toggle").checked) {
+          speak(displayString);
+        }
+
+        if (availableNumbers.length === 0) {
+          document.getElementById("draw-btn").disabled = true;
+        }
+      }
+
+      function speak(text) {
+        if (synth.speaking) synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "en-IE"; // Hint to the browser/OS to prefer an Irish voice
+        if (selectedVoice) utter.voice = selectedVoice;
+        utter.pitch = 1;
+        utter.rate = 0.9;
+        synth.speak(utter);
+      }
+
+      function updateDisplay(val) {
+        document.getElementById("current-call").innerText = val.replace(/\s+/g, "");
+        document.getElementById("count").innerText = calledNumbers.length;
+      }
+
+      function addToHistory(val) {
+        const container = document.getElementById("history");
+        const item = document.createElement("div");
+        item.className = "history-item";
+        item.innerText = val.replace(/\s+/g, "");
+        item.onclick = function () {
+          this.classList.toggle("verified");
+        };
+        container.prepend(item);
+      }
+
+      function resetGame() {
+        if (confirm("Reset the game? This clears all called numbers.")) {
+          initGame();
+        }
+      }
+
+      initGame();
+    </script>
+  </body>
+</html>
