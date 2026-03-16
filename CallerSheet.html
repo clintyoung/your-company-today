@@ -144,6 +144,25 @@
         font-size: 1rem;
         color: #888;
       }
+
+      /* Last Called Styling */
+      .last-called-section {
+        width: 100%;
+        max-width: 800px;
+        margin-bottom: 10px;
+      }
+
+      #last-called-number {
+        display: inline-block;
+        background: #a3821a;
+        color: white;
+        font-size: 1.6rem;
+        font-weight: 600;
+        padding: 12px 30px;
+        border-radius: 8px;
+        margin-top: 10px;
+        letter-spacing: 2px;
+      }
       .reset-btn {
         background-color: transparent;
         color: #a3821a;
@@ -176,6 +195,11 @@
     </div>
 
     <div class="stats">Progress: <span id="count">0</span> / 75</div>
+
+    <div class="last-called-section">
+      <h3>LAST CALLED</h3>
+      <div id="last-called-number"></div>
+    </div>
 
     <div class="history-section">
       <h3>CALL HISTORY (Click to Verify)</h3>
@@ -253,12 +277,19 @@
         }
         updateDisplay("-");
         document.getElementById("history").innerHTML = "";
+        document.getElementById("last-called-number").innerText = "";
         document.getElementById("draw-btn").disabled = false;
         toggleVoiceSelector();
       }
 
       function drawNumber() {
         if (availableNumbers.length === 0) return;
+
+        // Snapshot the current number as "last called" before drawing the next
+        const prev = calledNumbers[calledNumbers.length - 1];
+        document.getElementById("last-called-number").innerText = prev
+          ? `${prev.letter}${prev.num}`
+          : "";
 
         const randomIndex = Math.floor(Math.random() * availableNumbers.length);
         const picked = availableNumbers.splice(randomIndex, 1)[0];
@@ -293,14 +324,24 @@
       }
 
       function addToHistory(val) {
+        // Re-render history sorted numerically by ball number
         const container = document.getElementById("history");
-        const item = document.createElement("div");
-        item.className = "history-item";
-        item.innerText = val.replace(/\s+/g, "");
-        item.onclick = function () {
-          this.classList.toggle("verified");
-        };
-        container.prepend(item);
+        const verifiedSet = new Set(
+          [...container.querySelectorAll(".history-item.verified")].map((el) => el.innerText)
+        );
+
+        container.innerHTML = "";
+        const sorted = [...calledNumbers].sort((a, b) => a.num - b.num);
+        sorted.forEach((entry) => {
+          const label = `${entry.letter}${entry.num}`;
+          const item = document.createElement("div");
+          item.className = "history-item" + (verifiedSet.has(label) ? " verified" : "");
+          item.innerText = label;
+          item.onclick = function () {
+            this.classList.toggle("verified");
+          };
+          container.appendChild(item);
+        });
       }
 
       function resetGame() {
